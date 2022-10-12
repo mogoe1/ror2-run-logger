@@ -14,7 +14,7 @@ namespace dev.mogoe
         ManualLogSource _logger;
         QueuedLock queuedLock;
 
-        public JsonFileLogger(string version, ManualLogSource logger)
+        public JsonFileLogger(string modVersion, string logVersion, ManualLogSource logger)
         {
             queuedLock = new QueuedLock();
             string folderPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDoc‌​uments), "ror2-run-logger");
@@ -30,7 +30,8 @@ namespace dev.mogoe
             this._logger.LogInfo("started logging to " + filePath);
             this.write("{", prependNewLine: false, prependComma: false);
             this.write($"   \"timestamp\": {DateTimeOffset.Now.ToUnixTimeSeconds()},", prependComma: false);
-            this.write($"   \"version\": \"{version}\",", prependComma: false);
+            this.write($"   \"modVersion\": \"{modVersion}\",", prependComma: false);
+            this.write($"   \"logVersion\": \"{logVersion}\",", prependComma: false);
             this.write($"   \"log\":[", flush: true, prependComma: false);
         }
 

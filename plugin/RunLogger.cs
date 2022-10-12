@@ -9,7 +9,7 @@ namespace dev.mogoe
         public const string PluginGUID = "dev.mogoe.RunLogger";
         public const string PluginAuthor = "mogoe";
         public const string PluginName = "RunLogger";
-        public const string PluginVersion = "0.0.50";
+        public const string PluginVersion = "0.0.51";
 
         public const float STATS_INTERVAL = 1.0f;
 
@@ -27,7 +27,7 @@ namespace dev.mogoe
                 if (LocalUserManager.GetFirstLocalUser().currentNetworkUser.isServer)
                 {
                     nextStatsPrint = 0;
-                    fileLogger = new JsonFileLogger(PluginVersion, Logger);
+                    fileLogger = new JsonFileLogger(PluginVersion, "1", Logger);
                     fileLogger.logRunStart(run.gameModeIndex, run.selectedDifficulty);
                 }
                 orig(run);
