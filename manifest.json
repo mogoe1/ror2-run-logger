@@ -1,0 +1,10 @@
+﻿{
+	"name": "RunLogger",
+	"version_number": "0.0.50",
+	"website_url": "",
+	"description": "Logs your run to to a file for further analysis",
+	"dependencies": [
+		"bbepis-BepInExPack-5.4.9",
+		"RiskofThunder-HookGenPatcher-1.2.1"
+	]
+}
