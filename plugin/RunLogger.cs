@@ -1,5 +1,6 @@
 ﻿using BepInEx;
 using RoR2;
+using RoR2.Skills;
 
 namespace dev.mogoe
 {
@@ -16,6 +17,7 @@ namespace dev.mogoe
         private JsonFileLogger fileLogger;
         private float nextStatsPrint = 0;
         private HoldoutZoneController holdoutZoneController;
+        private BossGroup bossGroup;
 
 
         public void Awake()
@@ -27,7 +29,7 @@ namespace dev.mogoe
                 if (LocalUserManager.GetFirstLocalUser().currentNetworkUser.isServer)
                 {
                     nextStatsPrint = 0;
-                    fileLogger = new JsonFileLogger(PluginVersion, "1", Logger);
+                    fileLogger = new JsonFileLogger(PluginVersion, 2, Logger);
                     fileLogger.logRunStart(run.gameModeIndex, run.selectedDifficulty);
                 }
                 orig(run);
@@ -51,13 +53,13 @@ namespace dev.mogoe
                 orig(run, sceneDef);
             };
 
-            On.RoR2.PlayerCharacterMasterController.OnBodyStart += (orig, masterControler) =>
+            On.RoR2.PlayerCharacterMasterController.OnBodyStart += (orig, masterController) =>
             {
                 if (fileLogger != null)
                 {
-                    fileLogger.logPlayerSpawn(masterControler);
+                    fileLogger.logPlayerSpawn(masterController);
                 }
-                orig(masterControler);
+                orig(masterController);
             };
 
             On.RoR2.Inventory.GiveItem_ItemIndex_int += (On.RoR2.Inventory.orig_GiveItem_ItemIndex_int orig, RoR2.Inventory inventory, ItemIndex index, int count) =>
@@ -98,22 +100,40 @@ namespace dev.mogoe
                 }
             };
 
-            On.RoR2.Run.OnServerBossAdded += (orig, run, bossGroup, characterMaster) =>
+            BossGroup.onBossGroupStartServer += (bossGroup) =>
             {
+                this.bossGroup = bossGroup;
                 if (fileLogger != null)
                 {
-                    fileLogger.logBossSpawn();
+
+                    foreach (CharacterMaster master in bossGroup.combatSquad.readOnlyMembersList)
+                    {
+                        fileLogger.logBossSpawn(master);
+                    }
+                    fileLogger.logBossUpdate(bossGroup);
+
+                    this.bossGroup.combatSquad.onMemberAddedServer += (addedMember) =>
+                    {
+                        if (fileLogger != null)
+                        {
+                            fileLogger.logBossSpawn(addedMember);
+                        }
+                    };
+
+                    this.bossGroup.combatSquad.onMemberLost += (lostMember) =>
+                    {
+                        fileLogger.logBossDeath(lostMember);
+                    };
                 }
-                orig(run, bossGroup, characterMaster);
             };
 
-            On.RoR2.Run.OnServerBossDefeated += (orig, run, bossGroup) =>
+            BossGroup.onBossGroupDefeatedServer += (bossGroup) =>
             {
                 if (fileLogger != null)
                 {
-                    fileLogger.logBossDeath();
+                    fileLogger.logBossUpdate(bossGroup);
                 }
-                orig(run, bossGroup);
+                this.bossGroup = null;
             };
 
             RoR2.TeleporterInteraction.onTeleporterChargedGlobal += (interaction) =>
@@ -157,7 +177,8 @@ namespace dev.mogoe
                 orig(run, endingDef);
             };
 
-            Run.onRunDestroyGlobal += (Run run) => {
+            Run.onRunDestroyGlobal += (Run run) =>
+            {
                 if (fileLogger != null)
                 {
                     Logger.LogWarning("run cancled");
@@ -187,6 +208,11 @@ namespace dev.mogoe
             if (holdoutZoneController != null)
             {
                 fileLogger.logTeleporterUpdate(holdoutZoneController);
+            }
+
+            if (bossGroup != null)
+            {
+                fileLogger.logBossUpdate(bossGroup);
             }
 
             nextStatsPrint = nextStatsPrint + STATS_INTERVAL;

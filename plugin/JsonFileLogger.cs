@@ -1,7 +1,9 @@
 ﻿using BepInEx.Logging;
 using RoR2;
+using RoR2.Skills;
 using RoR2.Stats;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,7 +16,7 @@ namespace dev.mogoe
         ManualLogSource _logger;
         QueuedLock queuedLock;
 
-        public JsonFileLogger(string modVersion, string logVersion, ManualLogSource logger)
+        public JsonFileLogger(string modVersion, int logVersion, ManualLogSource logger)
         {
             queuedLock = new QueuedLock();
             string folderPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDoc‌​uments), "ror2-run-logger");
@@ -110,13 +112,33 @@ namespace dev.mogoe
         public void logPlayerSpawn(PlayerCharacterMasterController masterController)
         {
             var survirvor = SurvivorCatalog.FindSurvivorDefFromBody(masterController.master.bodyPrefab);
-            var buffer = $"      {{'type':'PLAYER_SPAWN', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{masterController.networkUser.id.value}','playerName':'{masterController.GetDisplayName()}', 'survivorId':'{survirvor.survivorIndex}'}}";
+            var buffer = $"      {{'type':'PLAYER_SPAWN', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{masterController.networkUser.id.value}', 'playerName':'{masterController.GetDisplayName()}', 'survivorId':{(int)survirvor.survivorIndex}, 'survivorName':'{survirvor.cachedName}', 'loadout':{getLoadoutAsJson(masterController)}}}";
             this.writeAsync(buffer);
+        }
+
+        private string getLoadoutAsJson(PlayerCharacterMasterController masterController)
+        {
+            var bodyIndex = masterController.master.GetBody().bodyIndex;
+            var loadoutManager = masterController.master.loadout.bodyLoadoutManager;
+            var bodySkills = BodyCatalog.GetBodyPrefabSkillSlots(bodyIndex);
+
+            List<string> entries = new List<string>();
+
+            for (var i = 0; i < bodySkills.Length; i++)
+            {
+                var familyName = bodySkills[i].skillName;
+
+                var usedVariantIndex = loadoutManager.GetSkillVariant(bodyIndex, i);
+                var usedVariant = bodySkills[i].skillFamily.variants[usedVariantIndex];
+                var usedVariantCatalogIndex = usedVariant.skillDef.skillIndex;
+                entries.Add($"{{'family':'{familyName}', 'variant':'{SkillCatalog.GetSkillName(usedVariantCatalogIndex)}'}}");                    
+            }
+            return "[" + String.Join(", ", entries) + "]";
         }
 
         public void logPlayerDeath(PlayerCharacterMasterController masterController)
         {
-            var buffer = $"      {{'type':'PLAYER_DEATH', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{masterController.networkUser.id.value}'}}";
+            var buffer = $"      {{'type':'PLAYER_DEATH', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{masterController.networkUser.id.value}', 'playerName':'{masterController.GetDisplayName()}'}}";
             this.writeAsync(buffer);
         }
 
@@ -132,7 +154,7 @@ namespace dev.mogoe
                 this._logger.LogWarning($"ITEM_PICKUP (ItemIndex {itemIndex}) without playerId, ignoring.");
             }
 
-            var buffer = $"      {{'type':'ITEM_PICKUP', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{playerId}', 'itemId':{itemIndex}, 'count':{amount}}}";
+            var buffer = $"      {{'type':'ITEM_PICKUP', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{playerId}', 'playerName':'{masterController.GetDisplayName()}', 'itemId':{itemIndex}, 'itemName':'{ItemCatalog.GetItemDef(itemIndex).name}', 'count':{amount}}}";
             this.writeAsync(buffer);
         }
 
@@ -142,7 +164,7 @@ namespace dev.mogoe
             {
                 return;
             }
-            var buffer = $"      {{'type':'ITEM_DROP', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{masterController.networkUser.id.value}', 'itemId':{itemIndex}, 'count':{amount}}}";
+            var buffer = $"      {{'type':'ITEM_DROP', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{masterController.networkUser.id.value}', 'playerName':'{masterController.GetDisplayName()}', 'itemId':{itemIndex}, 'itemName':'{ItemCatalog.GetItemDef(itemIndex).name}', 'count':{amount}}}";
             this.writeAsync(buffer);
         }
 
@@ -152,15 +174,27 @@ namespace dev.mogoe
             this.writeAsync(buffer);
         }
 
-        public void logBossSpawn()
+        public void logBossSpawn(CharacterMaster characterMaster)
         {
-            var buffer = $"      {{'type':'BOSS_SPAWN', 'time':{getTime()}, 'stopwatch':{getStopwatch()}}}";
+            var buffer = $"      {{'type':'BOSS_SPAWN', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'bossId':{(int)characterMaster.masterIndex}, 'bossName':'{MasterCatalog.GetMasterPrefab(characterMaster.masterIndex).name}'}}";
             this.writeAsync(buffer);
         }
 
-        public void logBossDeath()
+        public void logBossDeath(CharacterMaster characterMaster)
         {
-            var buffer = $"      {{'type':'BOSS_DEATH', 'time':{getTime()}, 'stopwatch':{getStopwatch()}}}";
+            var buffer = $"      {{'type':'BOSS_DEATH', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'bossId':{(int)characterMaster.masterIndex}, 'bossName':'{MasterCatalog.GetMasterPrefab(characterMaster.masterIndex).name}'}}";
+            this.writeAsync(buffer);
+        }
+
+        public void logBossUpdate(BossGroup bossGroup)
+        {
+            var numBossesAlive = bossGroup.combatSquad.memberCount;
+            float totalHealth = 0;
+            for (int i = 0; i < numBossesAlive; i++)
+            {
+                totalHealth += bossGroup.combatSquad.readOnlyMembersList[i].GetBody()?.healthComponent?.health ?? 0.0f;
+            }
+            var buffer = $"      {{'type':'BOSS_UPDATE', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'numBossesAlive':{numBossesAlive}, 'totalBossesHealth':{this.formatDecimal(totalHealth)}}}";
             this.writeAsync(buffer);
         }
 
@@ -209,7 +243,7 @@ namespace dev.mogoe
             if (sheet != null)
             {
                 HealthComponent.HealthBarValues healthBar = user.master.GetBody().healthComponent.GetHealthBarValues();
-                var buffer = $"      {{'type':'STATS_UPDATE', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{user.id.value}', " +
+                var buffer = $"      {{'type':'STATS_UPDATE', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'playerId':'{user.id.value}', 'playerName':'{user.masterController.GetDisplayName()}'," +
                     $"'totalDamageDealt':{getStat(sheet, StatDef.totalDamageDealt)}, " +
                     $"'totalMinionDamageDealt':{getStat(sheet, StatDef.totalMinionDamageDealt)}, " +
                     $"'totalKills':{getStat(sheet, StatDef.totalKills)}, " +
