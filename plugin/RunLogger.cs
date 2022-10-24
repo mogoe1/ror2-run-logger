@@ -1,6 +1,5 @@
 ﻿using BepInEx;
 using RoR2;
-using RoR2.Skills;
 
 namespace dev.mogoe
 {
@@ -10,7 +9,7 @@ namespace dev.mogoe
         public const string PluginGUID = "dev.mogoe.RunLogger";
         public const string PluginAuthor = "mogoe";
         public const string PluginName = "RunLogger";
-        public const string PluginVersion = "0.0.51";
+        public const string PluginVersion = "0.0.52";
 
         public const float STATS_INTERVAL = 1.0f;
 
@@ -29,7 +28,7 @@ namespace dev.mogoe
                 if (LocalUserManager.GetFirstLocalUser().currentNetworkUser.isServer)
                 {
                     nextStatsPrint = 0;
-                    fileLogger = new JsonFileLogger(PluginVersion, 2, Logger);
+                    fileLogger = new JsonFileLogger(PluginVersion, 3, Logger);
                     fileLogger.logRunStart(run.gameModeIndex, run.selectedDifficulty);
                 }
                 orig(run);
@@ -122,7 +121,10 @@ namespace dev.mogoe
 
                     this.bossGroup.combatSquad.onMemberLost += (lostMember) =>
                     {
-                        fileLogger.logBossDeath(lostMember);
+                        if (fileLogger != null)
+                        {
+                            fileLogger.logBossDeath(lostMember);
+                        }
                     };
                 }
             };

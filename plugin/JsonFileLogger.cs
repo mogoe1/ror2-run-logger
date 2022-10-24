@@ -30,14 +30,14 @@ namespace dev.mogoe
 
             this._logger = logger;
             this._logger.LogInfo("started logging to " + filePath);
-            this.write("{", prependNewLine: false, prependComma: false);
-            this.write($"   \"timestamp\": {DateTimeOffset.Now.ToUnixTimeSeconds()},", prependComma: false);
-            this.write($"   \"modVersion\": \"{modVersion}\",", prependComma: false);
-            this.write($"   \"logVersion\": \"{logVersion}\",", prependComma: false);
-            this.write($"   \"log\":[", flush: true, prependComma: false);
+            this.writeAsync("{", prependNewLine: false, prependComma: false);
+            this.writeAsync($"   \"timestamp\": {DateTimeOffset.Now.ToUnixTimeSeconds()},", prependComma: false);
+            this.writeAsync($"   \"modVersion\": \"{modVersion}\",", prependComma: false);
+            this.writeAsync($"   \"logVersion\": \"{logVersion}\",", prependComma: false);
+            this.writeAsync($"   \"log\":[", flush: true, prependComma: false);
         }
 
-        private void write(string entry, bool prependComma = true, bool flush = false, bool prependNewLine = true)
+        private void write(string entry, bool prependComma = true, bool flush = false, bool prependNewLine = true, bool close = false)
         {
             try
             {
@@ -56,6 +56,11 @@ namespace dev.mogoe
                 {
                     streamWriter.Flush();
                 }
+
+                if (close)
+                {
+                    streamWriter.Close();
+                }
             }
             finally
             {
@@ -63,9 +68,9 @@ namespace dev.mogoe
                 queuedLock.Exit();
             }
         }
-        private Task writeAsync(string entry, bool prependComma = true, bool flush = false, bool prependNewLine = true)
+        private Task writeAsync(string entry, bool prependComma = true, bool flush = false, bool prependNewLine = true, bool close = false)
         {
-            return Task.Run(() => write(entry, prependComma, flush, prependNewLine));
+            return Task.Run(() => write(entry, prependComma, flush, prependNewLine, close));
         }
 
         private string formatDecimal(double number)
@@ -105,7 +110,7 @@ namespace dev.mogoe
 
         public void logAdvanceStage()
         {
-            var buffer = $"      {{'type':'STAGE_FINISHED', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'difficultyCoeff':{formatDecimal(Run.instance.difficultyCoefficient)}}}";
+            var buffer = $"      {{'type':'STAGE_END', 'time':{getTime()}, 'stopwatch':{getStopwatch()}, 'difficultyCoeff':{formatDecimal(Run.instance.difficultyCoefficient)}}}";
             this.writeAsync(buffer);
         }
 
@@ -131,7 +136,7 @@ namespace dev.mogoe
                 var usedVariantIndex = loadoutManager.GetSkillVariant(bodyIndex, i);
                 var usedVariant = bodySkills[i].skillFamily.variants[usedVariantIndex];
                 var usedVariantCatalogIndex = usedVariant.skillDef.skillIndex;
-                entries.Add($"{{'family':'{familyName}', 'variant':'{SkillCatalog.GetSkillName(usedVariantCatalogIndex)}'}}");                    
+                entries.Add($"{{'family':'{familyName}', 'variant':'{SkillCatalog.GetSkillName(usedVariantCatalogIndex)}'}}");
             }
             return "[" + String.Join(", ", entries) + "]";
         }
@@ -222,7 +227,7 @@ namespace dev.mogoe
 
         public void logTeleporterFinished()
         {
-            var buffer = $"      {{'type':'TELEPORTER_FINISHED', 'time':{getTime()}, 'stopwatch':{getStopwatch()}}}";
+            var buffer = $"      {{'type':'TELEPORTER_END', 'time':{getTime()}, 'stopwatch':{getStopwatch()}}}";
             this.writeAsync(buffer);
         }
 
@@ -262,13 +267,9 @@ namespace dev.mogoe
 
         public void Dispose()
         {
-            lock (streamWriter)
-            {
-                this.write("   ]", prependComma: false);
-                this.write("}", flush: true, prependComma: false);
-                streamWriter.Close();
-                this._logger.LogInfo("finished logging");
-            }
+            this.writeAsync("   ]", prependComma: false);
+            this.writeAsync("}", flush: true, prependComma: false, close: true);
+            this._logger.LogInfo("finished logging");
         }
     }
 
